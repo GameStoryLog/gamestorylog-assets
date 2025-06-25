@@ -1,0 +1,12 @@
+{
+  "name": "gamestory-assets",
+  "version": "1.0.0",
+  "description": "Image assets for GameStory website",
+  "scripts": {
+    "convert": "node convert-and-upload.js convert",
+    "urls": "node convert-and-upload.js urls"
+  },
+  "dependencies": {
+    "sharp": "^0.34.2"
+  }
+}
