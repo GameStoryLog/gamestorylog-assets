@@ -87,14 +87,55 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-async function convertToWebP(inputPath, outputPath) {
+async function convertToWebP(inputPath, outputPath, imageType) {
     try {
         // Get original file size
         const originalStats = fs.statSync(inputPath);
         const originalSize = originalStats.size;
         
+        // Get image metadata
+        const metadata = await sharp(inputPath).metadata();
+        const originalWidth = metadata.width;
+        const originalHeight = metadata.height;
+        const originalRatio = originalWidth / originalHeight;
+        
+        let sharpInstance = sharp(inputPath);
+        let targetWidth, targetHeight, targetRatio, resizeMethod;
+        
+        // Define target dimensions and ratios
+        if (imageType === 'covers') {
+            // 2:3 ratio for covers (portrait)
+            targetRatio = 2 / 3;
+            targetWidth = 600;  // Standard cover width
+            targetHeight = 900; // 600 * 1.5 = 900
+            resizeMethod = 'Cover image (2:3 ratio)';
+        } else {
+            // 16:9 ratio for banners and screenshots (landscape)
+            targetRatio = 16 / 9;
+            targetWidth = 1920; // Standard HD width
+            targetHeight = 1080; // 1920 / 16 * 9 = 1080
+            resizeMethod = 'Banner/Screenshot (16:9 ratio)';
+        }
+        
+        // Smart cropping based on aspect ratio difference
+        if (Math.abs(originalRatio - targetRatio) > 0.1) {
+            // Significant aspect ratio difference - crop intelligently
+            sharpInstance = sharpInstance
+                .resize(targetWidth, targetHeight, {
+                    fit: 'cover',           // Crop to fill the exact dimensions
+                    position: 'center'      // Crop from center
+                });
+        } else {
+            // Similar aspect ratio - just resize
+            sharpInstance = sharpInstance
+                .resize(targetWidth, targetHeight, {
+                    fit: 'inside',          // Resize to fit within dimensions
+                    withoutEnlargement: false
+                });
+        }
+        
         // Convert to WebP with quality 80
-        await sharp(inputPath)
+        await sharpInstance
             .webp({ quality: 80 })
             .toFile(outputPath);
         
@@ -107,6 +148,7 @@ async function convertToWebP(inputPath, outputPath) {
         const savedSpace = originalSize - convertedSize;
         
         console.log(`✅ ${path.basename(inputPath)}`);
+        console.log(`   ${resizeMethod}: ${originalWidth}×${originalHeight} → ${targetWidth}×${targetHeight}`);
         console.log(`   Before: ${formatFileSize(originalSize)} → After: ${formatFileSize(convertedSize)}`);
         console.log(`   Saved: ${formatFileSize(savedSpace)} (${compressionRatio}% smaller)`);
         console.log('');
@@ -170,7 +212,7 @@ async function processImages() {
             continue;
         }
         
-        const result = await convertToWebP(inputPath, outputPath);
+        const result = await convertToWebP(inputPath, outputPath, folderType);
         
         if (result) {
             totalOriginalSize += result.originalSize;
