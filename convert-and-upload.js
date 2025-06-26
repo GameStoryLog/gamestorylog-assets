@@ -1,28 +1,83 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
-const ProgressBar = require('progress');
 const { execSync } = require('child_process');
-const config = require('./config');
 
-// Create input and output folders if they don't exist
-if (!fs.existsSync(config.inputFolder)) {
-    fs.mkdirSync(config.inputFolder, { recursive: true });
+// Configuration
+const INPUT_FOLDER = './input-images';
+const OUTPUT_FOLDERS = {
+    cover: './covers',
+    banner: './banners',
+    screenshot: './screenshots'
+};
+
+// Auto-detect GitHub repository info
+function getGitHubInfo() {
+    try {
+        // Get remote URL
+        const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
+        
+        // Parse GitHub URL (supports both HTTPS and SSH)
+        let match;
+        if (remoteUrl.includes('github.com')) {
+            // HTTPS: https://github.com/username/repo.git
+            // SSH: git@github.com:username/repo.git
+            match = remoteUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+)(?:\.git)?$/);
+            
+            if (match) {
+                return {
+                    username: match[1],
+                    repository: match[2]
+                };
+            }
+        }
+        
+        // Fallback - try to get from package.json if available
+        if (fs.existsSync('./package.json')) {
+            const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            if (packageJson.repository && packageJson.repository.url) {
+                const repoMatch = packageJson.repository.url.match(/github\.com[/:]([\w-]+)\/([\w-]+)/);
+                if (repoMatch) {
+                    return {
+                        username: repoMatch[1],
+                        repository: repoMatch[2]
+                    };
+                }
+            }
+        }
+        
+        // Default fallback
+        return {
+            username: 'gamestorylog',
+            repository: 'gamestorylog-assets'
+        };
+    } catch (error) {
+        console.log('⚠️  Could not auto-detect GitHub info, using default values');
+        return {
+            username: 'gamestorylog',
+            repository: 'gamestorylog-assets'
+        };
+    }
+}
+
+// Generate CDN URL
+function generateCDNUrl(folder, filename) {
+    const gitInfo = getGitHubInfo();
+    return `https://cdn.jsdelivr.net/gh/${gitInfo.username}/${gitInfo.repository}@main/${folder}/${filename}`;
+}
+
+// Create input folder if it doesn't exist
+if (!fs.existsSync(INPUT_FOLDER)) {
+    fs.mkdirSync(INPUT_FOLDER);
     console.log('Created input-images folder. Put your images there!');
 }
-Object.values(config.outputFolders).forEach(folder => {
+
+// Create output folders if they don't exist
+Object.values(OUTPUT_FOLDERS).forEach(folder => {
     if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
+        fs.mkdirSync(folder);
     }
 });
-
-// Initialize log file
-const logStream = fs.createWriteStream(config.logFile, { flags: 'a' });
-const originalConsoleLog = console.log;
-console.log = (...args) => {
-    logStream.write(args.join(' ') + '\n');
-    originalConsoleLog(...args);
-};
 
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -32,109 +87,47 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function getAllFiles(dir) {
-    const baseDir = path.resolve(dir);
-    return fs.readdirSync(dir, { withFileTypes: true }).flatMap(item => {
-        const fullPath = path.join(dir, item.name);
-        const relativePath = path.relative(baseDir, fullPath);
-        return item.isDirectory() ? getAllFiles(fullPath) : [relativePath];
-    });
-}
-
-async function convertToWebP(inputPath, outputPath, quality) {
+async function convertToWebP(inputPath, outputPath) {
     try {
+        // Get original file size
         const originalStats = fs.statSync(inputPath);
         const originalSize = originalStats.size;
-
-        // Validate image dimensions
-        const metadata = await sharp(inputPath).metadata();
-        const aspectRatio = metadata.width / metadata.height;
-        if (aspectRatio > config.maxAspectRatio || aspectRatio < 1 / config.maxAspectRatio) {
-            console.log(`⚠️ Warning: ${path.basename(inputPath)} has unusual aspect ratio (${metadata.width}x${metadata.height})`);
-        }
-
+        
+        // Convert to WebP with quality 80
         await sharp(inputPath)
-            .webp({ quality })
+            .webp({ quality: 80 })
             .toFile(outputPath);
-
+        
+        // Get converted file size
         const convertedStats = fs.statSync(outputPath);
         const convertedSize = convertedStats.size;
+        
+        // Calculate compression
         const compressionRatio = ((originalSize - convertedSize) / originalSize * 100).toFixed(1);
         const savedSpace = originalSize - convertedSize;
-
-        console.log(`✅ Converted ${path.basename(inputPath)}`);
+        
+        console.log(`✅ ${path.basename(inputPath)}`);
         console.log(`   Before: ${formatFileSize(originalSize)} → After: ${formatFileSize(convertedSize)}`);
         console.log(`   Saved: ${formatFileSize(savedSpace)} (${compressionRatio}% smaller)`);
         console.log('');
-
-        return { originalSize, convertedSize, savedSpace, inputPath };
+        
+        return { originalSize, convertedSize, savedSpace };
     } catch (error) {
         console.log(`❌ Failed to convert: ${path.basename(inputPath)} - ${error.message}`);
         console.log('');
-        return { error: error.message, inputPath };
-    }
-}
-
-async function recompressWebP(inputPath, outputPath, quality) {
-    try {
-        const originalStats = fs.statSync(inputPath);
-        const originalSize = originalStats.size;
-
-        // Validate image dimensions
-        const metadata = await sharp(inputPath).metadata();
-        const aspectRatio = metadata.width / metadata.height;
-        if (aspectRatio > config.maxAspectRatio || aspectRatio < 1 / config.maxAspectRatio) {
-            console.log(`⚠️ Warning: ${path.basename(inputPath)} has unusual aspect ratio (${metadata.width}x${metadata.height})`);
-        }
-
-        await sharp(inputPath)
-            .webp({ quality })
-            .toFile(outputPath);
-
-        const convertedStats = fs.statSync(outputPath);
-        const convertedSize = convertedStats.size;
-        const compressionRatio = ((originalSize - convertedSize) / originalSize * 100).toFixed(1);
-        const savedSpace = originalSize - convertedSize;
-
-        console.log(`✅ Recompressed ${path.basename(inputPath)}`);
-        console.log(`   Before: ${formatFileSize(originalSize)} → After: ${formatFileSize(convertedSize)}`);
-        console.log(`   Saved: ${formatFileSize(savedSpace)} (${compressionRatio}% smaller)`);
-        console.log('');
-
-        return { originalSize, convertedSize, savedSpace, inputPath };
-    } catch (error) {
-        console.log(`❌ Failed to recompress: ${path.basename(inputPath)} - ${error.message}`);
-        console.log('');
-        return { error: error.message, inputPath };
-    }
-}
-
-async function copyWebP(inputPath, outputPath) {
-    try {
-        fs.copyFileSync(inputPath, outputPath);
-        const stats = fs.statSync(inputPath);
-        const fileSize = stats.size;
-
-        console.log(`✅ Copied ${path.basename(inputPath)}`);
-        console.log(`   WebP Size: ${formatFileSize(fileSize)}`);
-        console.log('');
-
-        return { originalSize: fileSize, convertedSize: fileSize, savedSpace: 0, inputPath };
-    } catch (error) {
-        console.log(`❌ Failed to copy: ${path.basename(inputPath)} - ${error.message}`);
-        console.log('');
-        return { error: error.message, inputPath };
+        return null;
     }
 }
 
 async function processImages() {
-    if (!fs.existsSync(config.inputFolder)) {
+    if (!fs.existsSync(INPUT_FOLDER)) {
         console.log('❌ input-images folder not found!');
         return;
     }
 
-    const allFiles = getAllFiles(config.inputFolder);
-    const imageFiles = allFiles.filter(file =>
+    const files = fs.readdirSync(INPUT_FOLDER);
+    // Accept ALL image formats including WebP
+    const imageFiles = files.filter(file => 
         /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(file)
     );
 
@@ -146,219 +139,196 @@ async function processImages() {
 
     console.log(`Found ${imageFiles.length} images to process...\n`);
 
-    const quality = parseInt(process.argv[3]) || config.defaultQuality;
     let totalOriginalSize = 0;
     let totalConvertedSize = 0;
     let successCount = 0;
     const newUrls = [];
-    const errors = [];
 
-    const bar = new ProgressBar('Processing [:bar] :percent :etas', { total: imageFiles.length });
-
-    const results = await Promise.all(imageFiles.map(async file => {
-        const inputPath = path.join(config.inputFolder, file);
+    for (const file of imageFiles) {
+        const inputPath = path.join(INPUT_FOLDER, file);
         const nameWithoutExt = path.parse(file).name;
-
-        let outputFolder = config.outputFolders.cover;
-        let folderType = 'cover';
+        
+        // Determine output folder based on filename pattern
+        let outputFolder = './covers'; // default
+        let folderType = 'covers';
         if (file.toLowerCase().includes('banner') || file.toLowerCase().includes(' b.')) {
-            outputFolder = config.outputFolders.banner;
-            folderType = 'banner';
+            outputFolder = './banners';
+            folderType = 'banners';
         } else if (file.toLowerCase().includes('screenshot') || file.toLowerCase().includes('screen') || file.toLowerCase().includes(' s')) {
-            outputFolder = config.outputFolders.screenshot;
-            folderType = 'screenshot';
+            outputFolder = './screenshots';
+            folderType = 'screenshots';
         } else if (file.toLowerCase().includes('cover') || file.toLowerCase().includes(' c.')) {
-            outputFolder = config.outputFolders.cover;
-            folderType = 'cover';
+            outputFolder = './covers';
+            folderType = 'covers';
         }
 
         const outputPath = path.join(outputFolder, `${nameWithoutExt}.webp`);
-
+        
+        // Check if output file already exists
         if (fs.existsSync(outputPath)) {
-            console.log(`⏭️ ${path.basename(inputPath)} - already exists in output, skipping`);
-            bar.tick();
-            return null;
+            console.log(`⏭️  ${path.basename(inputPath)} - already converted, skipping`);
+            continue;
         }
-
-        let result;
-        if (/\.webp$/i.test(file)) {
-            if (process.argv.includes('--no-recompress')) {
-                result = await copyWebP(inputPath, outputPath);
-            } else {
-                result = await recompressWebP(inputPath, outputPath, quality);
-            }
-        } else {
-            result = await convertToWebP(inputPath, outputPath, quality);
-        }
-        bar.tick();
-
-        if (result && !result.error) {
+        
+        const result = await convertToWebP(inputPath, outputPath);
+        
+        if (result) {
             totalOriginalSize += result.originalSize;
             totalConvertedSize += result.convertedSize;
             successCount++;
-
+            
+            // Add to new URLs list with auto-detected GitHub info
             newUrls.push({
                 filename: `${nameWithoutExt}.webp`,
                 folder: folderType,
-                url: `https://cdn.jsdelivr.net/gh/${config.githubUsername}/${config.repoName}@${config.branch}/${folderType}/${nameWithoutExt}.webp`
+                url: generateCDNUrl(folderType, `${nameWithoutExt}.webp`)
             });
-
-            if (process.argv.includes('--clean')) {
-                fs.unlinkSync(inputPath);
-                console.log(`🗑️ Deleted original: ${path.basename(inputPath)}`);
-            }
-        } else if (result && result.error) {
-            errors.push({ file: path.basename(result.inputPath), error: result.error });
         }
-
-        return result;
-    }));
+    }
 
     // Show summary
     if (successCount > 0) {
         const totalSaved = totalOriginalSize - totalConvertedSize;
-        const totalCompressionRatio = totalSaved > 0 ? ((totalSaved / totalOriginalSize) * 100).toFixed(1) : 0;
-
-        console.log('\n📊 PROCESSING SUMMARY:');
-        console.log(`✅ ${successCount} images processed successfully`);
+        const totalCompressionRatio = ((totalSaved / totalOriginalSize) * 100).toFixed(1);
+        
+        console.log('📊 CONVERSION SUMMARY:');
+        console.log(`✅ ${successCount} images converted successfully`);
         console.log(`📁 Total original size: ${formatFileSize(totalOriginalSize)}`);
-        console.log(`✅ Total output size: ${formatFileSize(totalConvertedSize)}`);
-        console.log(`🎉 Total saved: ${formatFileSize(totalSaved)} (${totalCompressionRatio}% reduction)`);
+        console.log(`📁 Total converted size: ${formatFileSize(totalConvertedSize)}`);
+        console.log(`💾 Total space saved: ${formatFileSize(totalSaved)} (${totalCompressionRatio}% reduction)`);
         console.log('');
-
-        if (errors.length > 0) {
-            console.log('❌ FAILED OPERATIONS:');
-            errors.forEach(e => console.log(`   ${e.file}: ${e.error}`));
-            console.log('');
-        }
-
+        
+        // Show URLs for newly converted images
         if (newUrls.length > 0) {
-            console.log(`🔗 NEW IMAGE URLs (replace "${config.githubUsername}" if needed):`);
+            const gitInfo = getGitHubInfo();
+            console.log(`🔗 NEW IMAGE URLs (Auto-detected: ${gitInfo.username}/${gitInfo.repository}):`);
             console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-            const groupedUrls = { cover: [], banner: [], screenshot: [] };
-            newUrls.forEach(item => groupedUrls[item.folder].push(item.url));
-
+            
+            const groupedUrls = {
+                covers: [],
+                banners: [],
+                screenshots: []
+            };
+            
+            newUrls.forEach(item => {
+                groupedUrls[item.folder].push(item.url);
+            });
+            
             Object.keys(groupedUrls).forEach(folder => {
                 if (groupedUrls[folder].length > 0) {
                     console.log(`\n📁 ${folder.toUpperCase()}:`);
-                    groupedUrls[folder].forEach(url => console.log(`   ${url}`));
+                    groupedUrls[folder].forEach(url => {
+                        console.log(`   ${url}`);
+                    });
                 }
             });
             console.log('');
         }
-
-        if (process.argv.includes('--git')) {
-            try {
-                execSync('git add .');
-                execSync('git commit -m "Images"');
-                execSync('git push');
-                console.log('✅ Pushed to GitHub');
-            } catch (error) {
-                console.log(`❌ Failed to push to Git: ${error.message}`);
-            }
-        }
     } else if (imageFiles.length > 0) {
-        console.log('ℹ️ All images were already processed or failed. No new files handled.');
+        console.log('ℹ️  All images were already converted. No new files processed.');
     }
 
-    console.log('\n🎉 Processing complete!');
-    if (successCount > 0 && !process.argv.includes('--git')) {
-        console.log('\nNext Steps:');
-        console.log('1. Run: git add .');
-        console.log('2. Run: git commit -m "Images"');
-        console.log('3. Run: git push');
-        console.log('\nThen your images will be available at:');
-        console.log(`https://cdn.jsdelivr.net/gh/${config.githubUsername}/${config.repoName}@${config.branch}/covers/filename.webp`);
-    }
-}
-
-function generateUrls() {
-    console.log('\n📋 URLs for images in the latest Git commit:');
-    console.log(`Replace "${config.githubUsername}" with your actual GitHub username if needed\n`);
-
-    let recentFiles = [];
-    try {
-        const gitDiff = execSync('git log -1 --name-only --pretty=format:', { encoding: 'utf8' });
-        recentFiles = gitDiff.split('\n').filter(file => file && /\.webp$/i.test(file));
-    } catch (error) {
-        console.log(`❌ Failed to get latest commit files: ${error.message}`);
-        return;
-    }
-
-    if (recentFiles.length === 0) {
-        console.log('ℹ️ No WebP files found in the latest commit. Use "npm run recent" to see all URLs.');
-        return;
-    }
-
-    const groupedUrls = { cover: [], banner: [], screenshot: [] };
-    recentFiles.forEach(file => {
-        const folderType = Object.keys(config.outputFolders).find(key =>
-            file.startsWith(config.outputFolders[key].replace('./', ''))
-        );
-        if (folderType) {
-            const url = `https://cdn.jsdelivr.net/gh/${config.githubUsername}/${config.repoName}@${config.branch}/${folderType}/${path.basename(file)}`;
-            groupedUrls[folderType].push(url);
-        }
-    });
-
-    let hasFiles = false;
-    Object.keys(groupedUrls).forEach(folder => {
-        if (groupedUrls[folder].length > 0) {
-            console.log(`\n📁 ${folder.toUpperCase()}:`);
-            groupedUrls[folder].forEach(url => console.log(`   ${url}`));
-            hasFiles = true;
-        }
-    });
-
-    if (!hasFiles) {
-        console.log('ℹ️ No WebP files found in the latest commit.');
-    }
-    console.log('');
+    console.log('🎉 Conversion complete!');
+    console.log('\nNext steps:');
+    console.log('1. Run: git add .');
+    console.log('2. Run: git commit -m "Add new images"');
+    console.log('3. Run: git push');
+    console.log('4. Wait 1-2 minutes, then your URLs will be live!');
 }
 
 function generateAllUrls() {
-    console.log('\n📋 URLs for all images:');
-    console.log(`Replace "${config.githubUsername}" with your actual GitHub username if needed\n`);
-
-    let hasFiles = false;
-    Object.entries(config.outputFolders).forEach(([folderType, folderPath]) => {
-        if (fs.existsSync(folderPath)) {
-            const files = fs.readdirSync(folderPath).filter(f => f.endsWith('.webp'));
+    const gitInfo = getGitHubInfo();
+    console.log(`\n📋 ALL IMAGE URLs IN REPOSITORY (${gitInfo.username}/${gitInfo.repository}):`);
+    console.log('');
+    
+    Object.values(OUTPUT_FOLDERS).forEach(folder => {
+        if (fs.existsSync(folder)) {
+            const files = fs.readdirSync(folder).filter(f => f.endsWith('.webp'));
             if (files.length > 0) {
-                console.log(`\n📁 ${folderType.toUpperCase()}:`);
+                const folderName = path.basename(folder);
+                console.log(`📁 ${folderName.toUpperCase()}:`);
                 files.forEach(file => {
-                    console.log(`https://cdn.jsdelivr.net/gh/${config.githubUsername}/${config.repoName}@${config.branch}/${folderType}/${file}`);
+                    console.log(`   ${generateCDNUrl(folderName, file)}`);
                 });
-                hasFiles = true;
+                console.log('');
             }
         }
     });
-
-    if (!hasFiles) {
-        console.log('ℹ️ No WebP files found in output folders.');
-    }
-    console.log('');
 }
 
+function getFilesFromLastCommit() {
+    try {
+        // Get files changed in last commit
+        const result = execSync('git diff --name-only HEAD~1 HEAD', { encoding: 'utf8' });
+        const changedFiles = result.trim().split('\n').filter(f => f.trim());
+        
+        if (changedFiles.length === 0) {
+            console.log('📝 No files changed in last commit.');
+            return;
+        }
+
+        const gitInfo = getGitHubInfo();
+        console.log(`\n🔗 URLs FOR FILES FROM LAST COMMIT (${gitInfo.username}/${gitInfo.repository}):`);
+        console.log('');
+
+        const imageFiles = changedFiles.filter(file => 
+            file.endsWith('.webp') && 
+            (file.startsWith('covers/') || file.startsWith('banners/') || file.startsWith('screenshots/'))
+        );
+
+        if (imageFiles.length === 0) {
+            console.log('📝 No image files were changed in the last commit.');
+            return;
+        }
+
+        const groupedUrls = {
+            covers: [],
+            banners: [],
+            screenshots: []
+        };
+
+        imageFiles.forEach(file => {
+            const parts = file.split('/');
+            const folder = parts[0];
+            const filename = parts[1];
+            
+            if (groupedUrls[folder]) {
+                groupedUrls[folder].push(generateCDNUrl(folder, filename));
+            }
+        });
+
+        Object.keys(groupedUrls).forEach(folder => {
+            if (groupedUrls[folder].length > 0) {
+                console.log(`📁 ${folder.toUpperCase()}:`);
+                groupedUrls[folder].forEach(url => {
+                    console.log(`   ${url}`);
+                });
+                console.log('');
+            }
+        });
+
+    } catch (error) {
+        console.log('❌ Error getting last commit info. Make sure you have commits in your repository.');
+        console.log('💡 Tip: Run "git log --oneline" to see your commits');
+    }
+}
+
+// Check command line arguments
+const command = process.argv[2];
+
 async function main() {
-    const command = process.argv[2];
     if (command === 'convert') {
         await processImages();
     } else if (command === 'urls') {
-        generateUrls();
-    } else if (command === 'recent') {
         generateAllUrls();
+    } else if (command === 'commit-urls') {
+        getFilesFromLastCommit();
     } else {
         console.log('Usage:');
-        console.log('  npm run convert [--quality N] [--clean] [--git] [--no-recompress] - Process images from input-images folder');
-        console.log('  npm run urls     - Generate URLs for images in the latest Git commit');
-        console.log('  npm run recent   - Generate URLs for all existing images');
+        console.log('  npm run convert     - Convert images from input-images folder');
+        console.log('  npm run urls        - Generate URLs for ALL images in repository');
+        console.log('  npm run commit-urls - Generate URLs for images from last commit only');
     }
-    logStream.end();
 }
 
-main().catch(error => {
-    console.error(`❌ Error: ${error.message}`);
-    logStream.end();
-});
+main().catch(console.error);

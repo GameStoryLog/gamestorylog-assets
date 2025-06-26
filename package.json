@@ -1,14 +1,13 @@
 {
-  "name": "gamestory-assets",
+  "name": "gamestorylog-assets",
   "version": "1.0.0",
-  "description": "Image assets for GameStory website",
+  "description": "Image assets for GameStoryLog website",
   "scripts": {
     "convert": "node convert-and-upload.js convert",
     "urls": "node convert-and-upload.js urls",
-    "recent": "node convert-and-upload.js recent"
+    "commit-urls": "node convert-and-upload.js commit-urls"
   },
   "dependencies": {
-    "sharp": "^0.34.2",
-    "progress": "^2.0.3"
+    "sharp": "^0.32.0"
   }
 }
