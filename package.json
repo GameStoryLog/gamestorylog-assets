@@ -4,9 +4,11 @@
   "description": "Image assets for GameStory website",
   "scripts": {
     "convert": "node convert-and-upload.js convert",
-    "urls": "node convert-and-upload.js urls"
+    "urls": "node convert-and-upload.js urls",
+    "recent": "node convert-and-upload.js recent"
   },
   "dependencies": {
-    "sharp": "^0.34.2"
+    "sharp": "^0.34.2",
+    "progress": "^2.0.3"
   }
 }

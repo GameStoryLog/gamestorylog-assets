@@ -1,0 +1,102 @@
+❌ No image files found in input-images folder!
+💡 Supported formats: jpg, jpeg, png, gif, bmp (WebP files are skipped)
+Found 4 images to process...
+
+❌ Failed to copy: anita b.webp - ENOENT: no such file or directory, copyfile 'D:\Apps\gamestory-assets\input-images\input-images\anita b.webp' -> 'D:\Apps\gamestory-assets\banners\anita b.webp'
+
+❌ Failed to copy: back door b.webp - ENOENT: no such file or directory, copyfile 'D:\Apps\gamestory-assets\input-images\input-images\back door b.webp' -> 'D:\Apps\gamestory-assets\banners\back door b.webp'
+
+❌ Failed to copy: Imperial Bureaucracy Hero b.webp - ENOENT: no such file or directory, copyfile 'D:\Apps\gamestory-assets\input-images\input-images\Imperial Bureaucracy Hero b.webp' -> 'D:\Apps\gamestory-assets\banners\Imperial Bureaucracy Hero b.webp'
+
+❌ Failed to copy: regressor b.webp - ENOENT: no such file or directory, copyfile 'D:\Apps\gamestory-assets\input-images\input-images\regressor b.webp' -> 'D:\Apps\gamestory-assets\banners\regressor b.webp'
+
+ℹ️ All images were already processed. No new files handled.
+
+🎉 Processing complete!
+Found 4 images to process...
+
+✅ Copied anita b.webp
+   WebP Size: 142.01 KB
+
+✅ Copied back door b.webp
+   WebP Size: 258.9 KB
+
+✅ Copied Imperial Bureaucracy Hero b.webp
+   WebP Size: 207.71 KB
+
+✅ Copied regressor b.webp
+   WebP Size: 473.16 KB
+
+
+📊 PROCESSING SUMMARY:
+✅ 4 images processed successfully
+📁 Total original size: 1.06 MB
+📁 Total output size: 1.06 MB
+💾 Total space saved: 0 Bytes (0% reduction)
+
+🔗 NEW IMAGE URLs (replace "yourusername" if needed):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 BANNER:
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/anita b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/back door b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/Imperial Bureaucracy Hero b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/regressor b.webp
+
+
+🎉 Processing complete!
+
+Next steps:
+1. Run: git add .
+2. Run: git commit -m "Add new images"
+3. Run: git push
+
+Then your images will be available at:
+https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/covers/filename.webp
+Found 4 images to process...
+
+⚠️ Warning: Imperial Bureaucracy Hero b.webp has unusual aspect ratio (960x240)
+⚠️ Warning: back door b.webp has unusual aspect ratio (960x240)
+⚠️ Warning: anita b.webp has unusual aspect ratio (960x240)
+✅ Recompressed anita b.webp
+   Before: 142.01 KB → After: 13.88 KB
+   Saved: 128.13 KB (90.2% smaller)
+
+✅ Recompressed back door b.webp
+   Before: 258.9 KB → After: 34.35 KB
+   Saved: 224.55 KB (86.7% smaller)
+
+✅ Recompressed Imperial Bureaucracy Hero b.webp
+   Before: 207.71 KB → After: 59.17 KB
+   Saved: 148.54 KB (71.5% smaller)
+
+✅ Recompressed regressor b.webp
+   Before: 473.16 KB → After: 37.76 KB
+   Saved: 435.39 KB (92.0% smaller)
+
+
+📊 PROCESSING SUMMARY:
+✅ 4 images processed successfully
+📁 Total original size: 1.06 MB
+✅ Total output size: 145.17 KB
+🎉 Total saved: 936.61 KB (86.6% reduction)
+
+🔗 NEW IMAGE URLs (replace "yourusername" if needed):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 BANNER:
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/anita b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/back door b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/Imperial Bureaucracy Hero b.webp
+   https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/banner/regressor b.webp
+
+
+🎉 Processing complete!
+
+Next Steps:
+1. Run: git add .
+2. Run: git commit -m "Images"
+3. Run: git push
+
+Then your images will be available at:
+https://cdn.jsdelivr.net/gh/yourusername/gamestory-assets@main/covers/filename.webp
